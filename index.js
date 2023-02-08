@@ -1,35 +1,42 @@
 const { readFile } = require('fs/promises');
 const wordlist = 'wordlists/enable5.txt';
+// const wordlist = 'wordlists/enable5_test.txt';
 
-// This is just dumb brute force. 
 
-//const knownInfo = [
-    //{
-        //correctLetters: [".",".",".",".","."],
-        //incorrectLetters: ["r", "s", "i"],
-        //badLetters: ["a", "g", "l", "y", "m"]
-    //},
-    //{
-        //correctLetters: [".","e","n",".","."],
-        //incorrectLetters: ["e", "h"],
-        //badLetters: ["a", "g", "l", "y", "m"]
-    //},
-    //{
-        //correctLetters: [".",".",".",".","."],
-        //incorrectLetters: ["r", "e", "o", "t"],
-        //badLetters: ["a", "g", "l", "y", "m","i","s","h","n","u"]
-    //},
-    //{
-        //correctLetters: ["r",".",".",".","."],
-        //incorrectLetters: ["e", "u"],
-        //badLetters: ["a", "g", "l", "y", "m","i","o","s","h","n"]
-    //},
-    //{
-        //correctLetters: [".","e",".",".","."],
-        //incorrectLetters: ["r","e","d","t"],
-        //badLetters: ["a", "g", "l", "y", "m","u","i","o","s","h","n"]
-    //},
-// ];
+// square is a 2d array of letters
+// [ 
+//   [c,    r,    i,    s,    p],
+//   [h,    e,    n,    c,    e],
+//   [o, null, null, null, null],
+//   [r, null, null, null, null],
+//   [d, null, null, null, null],
+// ]
+
+// letters that are IN each across word but not in the right place
+const letterPatterns = [
+    [ /c/, /...[^c]./ ],
+    [ /h/, /e/, /..[^e].[^h]/ ],
+    [ /r/, /.[^r].../ ],
+    [ /r/, /e/, /.[^r][^e]../ ],
+    [ /r/, /e/, /.[^r][^e]../ ],
+];
+
+// letters that are NOT IN each word
+const negativeLetterPatterns = [
+   [ /[wakmhe]/ ],
+   [ /[wakmrs]/ ],
+   [ /[wakmshc]/ ],
+   [ /[wakmsch]/ ],
+   [ /[wakmsch]/ ],
+]
+
+const initialSquare = [
+    ["", "r", "", "s", ""],
+    ["", "", "", "c", ""],
+    ["", "", "e", "", ""],
+    ["", "", "", "", ""],
+    ["", "", "", "", ""],
+];
 
 // c r i s p
 // h e n c e
@@ -38,108 +45,81 @@ const wordlist = 'wordlists/enable5.txt';
 // d e t e r
 
 
-const guessedLetters = [];
-const knownInfo = [
-    {
-        correctLetters: [".",".",".",".","."],
-        incorrectLetters: [],
-    },
-    {
-        correctLetters: [".",".",".",".","."],
-        incorrectLetters: [],
-    },
-    {
-        correctLetters: [".",".",".",".","."],
-        incorrectLetters: [],
-    },
-    {
-        correctLetters: [".",".",".",".","."],
-        incorrectLetters: [],
-    },
-    {
-        correctLetters: [".",".",".",".","."],
-        incorrectLetters: [],
-    },
-];
-
-const possibleAnswers = [
-    [],
-    [],
-    [],
-    [],
-    [],
-];
-
-const wordMatchesInfo = (word, info) => {
-    return (
-        word.match(new RegExp(info.correctLetters.join(""))) &&
-        info.incorrectLetters.every(letter => word.includes(letter)) &&
-        // !word.match(new RegExp(`[${info.badLetters.join("")}]`))
-    );
-}
-
-const getVerticalWords = (words) => {
-
-    const verticalWords = [ "", "", "", "", "" ];
-
-    const wordAarray2D = words.map(word => {
-        return word.split("");
-    })
-
-    wordAarray2D.forEach(word => {
-        word.forEach((letter, index) => {
-            verticalWords[index] += letter;
-        })
-    })
-
-    return verticalWords;
-}
-
 const go = async () => {
     const words = (await readFile(wordlist, {encoding: 'utf8'})).split("\n");
 
-    words.forEach(word => {
-        knownInfo.forEach((info, index) => {
-            // console.log(`checking ${word} against ${info.correctLetters.join("")}`)
-            if (wordMatchesInfo(word, info)) {
-                possibleAnswers[index].push(word);
+    // index could be calculated instead of passed in, but that's computation time
+    // across 1, down 1, across 2, down 2... etc
+    const recurse = (square, isHorizontal, index) => {
+
+        // if (index >= 4) {
+            // console.log(`${Array(index+1).join(" ")}${index} / ${isHorizontal} / ${square}`);
+        // }
+
+        // success case
+        if (isHorizontal && index >=5) {
+            // you found one!
+            console.log("winner winner", square);
+            return;
+        }
+       
+        const squareCopy = [
+            [...square[0]],
+            [...square[1]],
+            [...square[2]],
+            [...square[3]],
+            [...square[4]],
+        ];
+
+        // get list of possible words for this direction/index
+        var letters;
+        if (isHorizontal) {
+            letters = squareCopy[index];
+        }
+        else {
+            letters = [
+                squareCopy[0][index],
+                squareCopy[1][index],
+                squareCopy[2][index],
+                squareCopy[3][index],
+                squareCopy[4][index]
+            ];
+        }
+
+        const pattern = letters.map(letter => letter ? letter : ".").join("")
+        const regex = new RegExp(pattern);
+
+        // loop through possibilities
+        // TODO: this does not further restrict down words to known info
+        words.forEach(word => {
+            if (
+                word.match(regex) &&
+                (!isHorizontal || letterPatterns[index].every(pattern => word.match(pattern))) &&
+                (!isHorizontal || !negativeLetterPatterns[index].some(pattern => word.match(pattern)))
+            ) {
+                // this word still works. go deeper.
+
+                const wordLetters = word.split("");
+                // create new square
+                if (isHorizontal) {
+                    squareCopy[index] = [...wordLetters]
+                }
+                else {
+                    squareCopy[0][index] = wordLetters[0];
+                    squareCopy[1][index] = wordLetters[1];
+                    squareCopy[2][index] = wordLetters[2];
+                    squareCopy[3][index] = wordLetters[3];
+                    squareCopy[4][index] = wordLetters[4];
+                }
+
+                //TODO: revisit 0 or 1 here
+                recurse(squareCopy, !isHorizontal, index + (isHorizontal ? 0 : 1));
             }
         })
-    })
 
-    // console.log("possible answers for word 1: ", possibleAnswers[0])
+    }
 
-    possibleAnswers[0].forEach((word1, i1) => {
-        console.log(`word1 loop: ${i1}/${possibleAnswers[0].length}`)
-        possibleAnswers[1].forEach((word2, i2) => {
-            // console.log(`word2 loop: ${i2}/${possibleAnswers[1].length}`)
-            possibleAnswers[2].forEach((word3, i3) => {
-                // console.log(`word3 loop: ${i3}/${possibleAnswers[2].length}`)
-                possibleAnswers[3].forEach((word4, i4) => {
-                    // console.log(`word4 loop: ${i4}/${possibleAnswers[3].length}`)
-                    possibleAnswers[4].forEach((word5, i5) => {
-                        // console.log(`word5 loop: ${i5}/${possibleAnswers[4].length}`)
-                        const verticalWords = getVerticalWords([word1, word2, word3, word4, word5])
-                        const verticalsAreValid = verticalWords.every(verticalWord => {
-                            return words.includes(verticalWord);
-                        });
-
-                        if (verticalsAreValid) {
-                            console.log("found valid arrangement:")
-                            console.log(` ${word1}`);
-                            console.log(` ${word2}`);
-                            console.log(` ${word3}`);
-                            console.log(` ${word4}`);
-                            console.log(` ${word5}`);
-                        }
-                    })
-                })
-            })
-        })
-    })
-
-
-    // console.log(possibleAnswers);
+    recurse(initialSquare, true, 0);
 }
 
 go();
