@@ -4,6 +4,8 @@ tater
 hence
 faker
 overt
+avert
+chard
 bless
 rupee
 chord

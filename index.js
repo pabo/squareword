@@ -1,42 +1,16 @@
 const { readFile } = require('fs/promises');
+// const wordlist = 'wordlists/yawl5.txt';
 const wordlist = 'wordlists/enable5.txt';
 // const wordlist = 'wordlists/enable5_test.txt';
 
+// notes on game rules
+// guessing a word with a single X, where the answer has an X in the right spot, will  also show you whether there is another X in the answer
+// guessing a word with a single X, where the answer has an X in the wrong spot, will *not* show you whether there is another X in the answer
 
-// square is a 2d array of letters
-// [ 
-//   [c,    r,    i,    s,    p],
-//   [h,    e,    n,    c,    e],
-//   [o, null, null, null, null],
-//   [r, null, null, null, null],
-//   [d, null, null, null, null],
-// ]
+// possible perf improvements:
+// instead of starting at across 1 and down 1, should I start with across that has the most info?
 
-// letters that are IN each across word but not in the right place
-const letterPatterns = [
-    [ /c/, /...[^c]./ ],
-    [ /h/, /e/, /..[^e].[^h]/ ],
-    [ /r/, /.[^r].../ ],
-    [ /r/, /e/, /.[^r][^e]../ ],
-    [ /r/, /e/, /.[^r][^e]../ ],
-];
 
-// letters that are NOT IN each word
-const negativeLetterPatterns = [
-   [ /[wakmhe]/ ],
-   [ /[wakmrs]/ ],
-   [ /[wakmshc]/ ],
-   [ /[wakmsch]/ ],
-   [ /[wakmsch]/ ],
-]
-
-const initialSquare = [
-    ["", "r", "", "s", ""],
-    ["", "", "", "c", ""],
-    ["", "", "e", "", ""],
-    ["", "", "", "", ""],
-    ["", "", "", "", ""],
-];
 
 // c r i s p
 // h e n c e
@@ -44,22 +18,60 @@ const initialSquare = [
 // r u p e e
 // d e t e r
 
+const possibleWords = new Set();
+// squares are 2d array of letters
+const initialSquare = [
+    ["", "", "", "", "t"],
+    ["", "", "", "e", ""],
+    ["", "", "o", "r", ""],
+    ["", "", "", "", ""],
+    ["", "", "", "e", ""],
+];
+
+// letters that are IN each across word but not in the right place
+const letterPatterns = [
+    // [ /h/, /e/, /..[^e].[^h]/ ],
+    [ /a/, /s/, /^[^as]....$/],
+    [ /d/, /o/, /r/, /^.[^d][^o][^r].$/],
+    [ /i/, /^..[^i]..$/],
+    [ /e/, /n/, /r/, /^.[^n].[^er].$/],
+    [ /d/, /e.*e/, /r/, /^.[^d].[^r].$/],
+];
+
+// letters that are NOT IN each word
+const negativeLetterPatterns = [
+//    [ /[wakmsch]/ ],
+    [/[dieunor]/],
+    [/[aiusnt]/, /e.*e/],
+    [/[adeusnt]/],
+    [/[adiusot]/],
+    [/[aiusnot]/ ],
+];
+
+const thereAreNone = /u/;
 
 const go = async () => {
-    const words = (await readFile(wordlist, {encoding: 'utf8'})).split("\n");
+    const allWords = (await readFile(wordlist, {encoding: 'utf8'})).split("\n");
+    const words = allWords.filter(word => !word.match(thereAreNone));
 
     // index could be calculated instead of passed in, but that's computation time
     // across 1, down 1, across 2, down 2... etc
     const recurse = (square, isHorizontal, index) => {
 
-        // if (index >= 4) {
-            // console.log(`${Array(index+1).join(" ")}${index} / ${isHorizontal} / ${square}`);
-        // }
+        //  if (index === 0 && isHorizontal) {
+            // console.log(`${Array(index+1).join(" ")}${index} / ${isHorizontal} / ${square[0].join("")}`);
+        //  }
 
         // success case
-        if (isHorizontal && index >=5) {
+        // if (isHorizontal && index >= 4) {
+        if (isHorizontal && index < 0) {
             // you found one!
             console.log("winner winner", square);
+
+            square.forEach(word => {
+                possibleWords.add(word.join(""));
+            });
+
             return;
         }
        
@@ -87,10 +99,9 @@ const go = async () => {
         }
 
         const pattern = letters.map(letter => letter ? letter : ".").join("")
-        const regex = new RegExp(pattern);
+        const regex = new RegExp(`^${pattern}$`);
 
         // loop through possibilities
-        // TODO: this does not further restrict down words to known info
         words.forEach(word => {
             if (
                 word.match(regex) &&
@@ -112,14 +123,17 @@ const go = async () => {
                     squareCopy[4][index] = wordLetters[4];
                 }
 
-                //TODO: revisit 0 or 1 here
-                recurse(squareCopy, !isHorizontal, index + (isHorizontal ? 0 : 1));
+                // recurse(squareCopy, !isHorizontal, index + (isHorizontal ? 0 : 1));
+                recurse(squareCopy, !isHorizontal, index - (isHorizontal ? 0 : 1));
             }
         })
 
     }
 
-    recurse(initialSquare, true, 0);
+    // recurse(initialSquare, true, 0);
+    recurse(initialSquare, true, 4);
+
+    // console.log(possibleWords);
 }
 
 go();
